@@ -1,7 +1,20 @@
-
-
 ### Code Server
 
-https://github.com/linuxserver/docker-code-server
+A self-hosted VS Code in the browser running in Docker.
 
-URL: <your_server_ip>:8443
+## Quick Reference
+- **Image:** LinuxServer.io code-server
+- **Port:** 8443
+- **Access URL:** https://localhost:8443
+- **Default Password:** `password`
+- **Workspaces:** Maps to /home/<user>/Development
+
+## Usage
+```bash
+cd /home/anmu/Development/homelab/code-server
+docker-compose up -d
+ ```
+
+## Official Documentation
+- [code-server GitHub](https://github.com/coder/code-server)
+- [LinuxServer.io code-server docs ](https://docs.linuxserver.io/images/docker-code-server/)

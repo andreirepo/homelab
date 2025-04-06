@@ -6,8 +6,8 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - TZ=Etc/UTC
-      - PASSWORD=let-me-code #optional
+      - TZ=Europe/Madrid
+      - PASSWORD=password #optional
       - HASHED_PASSWORD= #optional
       - SUDO_PASSWORD=password #optional
       - SUDO_PASSWORD_HASH= #optional

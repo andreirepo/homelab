@@ -1,0 +1,13 @@
+version: '2'
+services:
+  homer:
+    image: 'b4bz/homer'
+    restart: 'unless-stopped'
+    container_name: homer
+    ports:
+      - '8070:8080'
+    volumes:
+      - /data/docker/homer/assets:/www/assets
+    environment:
+      - UID=1000
+      - GID=1000
