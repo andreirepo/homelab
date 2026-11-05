@@ -1,0 +1,38 @@
+# GitHub Actions Runner Controller — ephemeral runners for andrei-portfolio.
+#
+# A personal account cannot create organisation runner groups, so a scale set
+# is scoped to exactly one repository. This is the second one; the App
+# installation has to include both repositories.
+#
+#   helm upgrade --install arc-portfolio --namespace arc-runners \
+#     -f k8s/arc/values-scale-set-portfolio.yaml \
+#     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+#
+# Workflows then target the label equal to the release name:
+#
+#   runs-on: arc-portfolio
+
+githubConfigUrl: https://github.com/andreirepo/andrei-portfolio
+
+# Same App, same installation, same namespace: reuse the existing secret.
+githubConfigSecret: arc-homelab-github-app
+
+minRunners: 0
+# The AI review is a single job per pull request with cancel-in-progress, so one
+# runner is enough. Keeping it at one also bounds the worst case: two scale sets
+# can be awake at the same time on a 3 GB cluster.
+maxRunners: 1
+
+template:
+  spec:
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        resources:
+          # The reviewer only needs curl and a checkout; 1Gi is generous.
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            memory: 1500Mi
