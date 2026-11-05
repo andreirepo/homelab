@@ -1,0 +1,35 @@
+# GitHub Actions Runner Controller — ephemeral runners for this repository.
+#
+#   kubectl -n arc-runners create secret generic arc-homelab-github-app \
+#     --from-literal=github_app_id=<APP_ID> \
+#     --from-literal=github_app_installation_id=<INSTALLATION_ID> \
+#     --from-file=github_app_private_key=./private-key.pem
+#
+#   helm upgrade --install arc-homelab --namespace arc-runners \
+#     -f k8s/arc/values-scale-set.yaml \
+#     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+#
+# No PAT anywhere: the controller mints short-lived registration tokens from a
+# GitHub App installation.
+
+githubConfigUrl: https://github.com/andreirepo/homelab
+githubConfigSecret: arc-homelab-github-app
+
+# The point of the whole exercise: no pods, no RAM, until a job is queued.
+minRunners: 0
+maxRunners: 2
+
+template:
+  spec:
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        command: ["/home/runner/run.sh"]
+        # Two runners of 512Mi (2Gi limit) fit in the 3 GB LXC alongside k3s,
+        # cert-manager and the controller. A third would not.
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            memory: 2Gi
