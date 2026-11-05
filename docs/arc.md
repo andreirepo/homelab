@@ -164,3 +164,22 @@ Two smaller findings from the same migration:
 
 Neither would have been caught by a green check. Both were caught by reading
 the log of a job that "succeeded".
+## Where this ended
+
+Two scale sets, both idle at zero pods, and no container runners left on the
+dev VM:
+
+| Repository | Build jobs | Deploy / AI review |
+|---|---|---|
+| `andrei-portfolio` | GitHub-hosted | ARC pod (`arc-portfolio`) |
+| `homelab` | GitHub-hosted | ARC pod (`arc-homelab`) |
+| `declara720` | GitHub-hosted | — |
+| `todo-app` | — | manual, documented in `DEPLOYMENT.md` |
+
+`todo-app` was the last container, and the honest reason it is not here: its
+pipeline needs Node, Docker buildx and SSH to a host behind NAT. Rather than
+build a privileged DinD runner on a 3 GB cluster, its workflow was retired and
+the deploy written down — build two amd64 images with the exact build args, push
+two tags, deploy by tag, roll back from the state file.
+
+That leaves nothing holding a personal access token.
