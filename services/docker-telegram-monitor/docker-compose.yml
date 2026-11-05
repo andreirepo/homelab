@@ -1,0 +1,21 @@
+services:
+  docker-monitor:
+    build: .
+    container_name: docker-telegram-monitor
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SERVER_NAME=${SERVER_NAME:-dev-server}
+      - CHECK_INTERVAL=30
+      - SEVERITY=warning
+      # Raise these if the chat is still too chatty:
+      - DEBOUNCE_SECONDS=30
+      - COOLDOWN_SECONDS=1800
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
