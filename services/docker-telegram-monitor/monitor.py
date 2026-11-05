@@ -86,6 +86,15 @@ def esc(value):
     )
 
 
+def human_duration(seconds):
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m {seconds % 60:02d}s"
+    return f"{seconds // 3600}h {(seconds % 3600) // 60:02d}m"
+
+
 def parse_docker_time(value):
     """Docker timestamps look like 2026-11-05T12:00:00.123456789Z."""
     if not value or value.startswith("0001-"):
@@ -144,6 +153,15 @@ class Monitor:
             log.warning("Could not inspect %s: %s", name, error)
             return None
 
+    def uptime(self, container):
+        """How long the container ran before it stopped."""
+        if container is None:
+            return None
+        started = parse_docker_time(container.attrs.get("State", {}).get("StartedAt", ""))
+        if not started:
+            return None
+        return human_duration(max(0, time.time() - started))
+
     def describe(self, container):
         """Restart count and last log lines, or empty strings."""
         if container is None:
@@ -160,67 +178,71 @@ class Monitor:
     # ---------------------------------------------------------------- messages
 
     def header(self):
-        return f"🖥️ <b>{SERVER_NAME}</b>"
+        return f"🖥️ <b>homelab</b> › {SERVER_NAME}"
 
-    def msg_down(self, name, image, exit_code, oom, restarts, logs):
-        emoji = SEVERITY_EMOJI.get(SEVERITY, "⚠️")
-        lines = [
-            self.header(),
-            "",
-            f"{emoji} <b>Container down</b>",
-            "",
-            f"<b>Name:</b> <code>{esc(name)}</code>",
-            f"<b>Image:</b> <code>{esc(image)}</code>",
+    def footer(self):
+        return f"<i>{datetime.now().strftime('%d %b %Y · %H:%M')}</i>"
+
+    def compose(self, emoji, title, fields, logs=""):
+        """One shape for every alert: header, title, key/value lines, logs, time."""
+        lines = [self.header(), "", f"{emoji} <b>{title}</b>", ""]
+        lines += [f"<b>{key}:</b> {value}" for key, value in fields]
+        if logs:
+            lines += ["", "<b>Last logs:</b>", f"<pre>{logs}</pre>"]
+        lines += ["", self.footer()]
+        return "\n".join(lines)
+
+    def msg_down(self, name, image, exit_code, oom, restarts, logs, ran_for=None):
+        fields = [
+            ("Container", f"<code>{esc(name)}</code>"),
+            ("Image", f"<code>{esc(image)}</code>"),
         ]
         if oom:
-            lines.append("<b>Killed by:</b> the OOM killer")
+            fields.append(("Killed by", "the OOM killer"))
         else:
-            lines.append(f"<b>Exit code:</b> <code>{esc(exit_code)}</code>")
-        lines.append(f"<b>Restarts:</b> <code>{restarts}</code>")
-        if logs:
-            lines += ["", "<b>Last logs:</b>", f"<pre>{logs}</pre>"]
-        lines += ["", f"<i>Still down {DEBOUNCE}s after it stopped.</i>"]
-        return "\n".join(lines)
+            fields.append(("Exit code", f"<code>{esc(exit_code)}</code>"))
+        if ran_for:
+            fields.append(("Ran for", ran_for))
+        fields.append(("Restarts", f"<code>{restarts}</code>"))
+        fields.append(("Still down", f"{DEBOUNCE}s after it stopped"))
+        return self.compose("🚨", "Container down", fields, logs)
 
-    def msg_recovered(self, name, image):
-        return "\n".join(
-            [
-                self.header(),
-                "",
-                "✅ <b>Container recovered</b>",
-                "",
-                f"<b>Name:</b> <code>{esc(name)}</code>",
-                f"<b>Image:</b> <code>{esc(image)}</code>",
-            ]
-        )
+    def msg_recovered(self, name, image, downtime=None):
+        fields = [
+            ("Container", f"<code>{esc(name)}</code>"),
+            ("Image", f"<code>{esc(image)}</code>"),
+        ]
+        if downtime:
+            fields.append(("Downtime", downtime))
+        return self.compose("✅", "Container recovered", fields)
 
     def msg_unhealthy(self, name, image, restarts, logs):
-        lines = [
-            self.header(),
-            "",
-            "🚨 <b>Container unhealthy</b>",
-            "",
-            f"<b>Name:</b> <code>{esc(name)}</code>",
-            f"<b>Image:</b> <code>{esc(image)}</code>",
-            f"<b>Restarts:</b> <code>{restarts}</code>",
+        fields = [
+            ("Container", f"<code>{esc(name)}</code>"),
+            ("Image", f"<code>{esc(image)}</code>"),
+            ("Health", "unhealthy"),
+            ("Restarts", f"<code>{restarts}</code>"),
         ]
-        if logs:
-            lines += ["", "<b>Last logs:</b>", f"<pre>{logs}</pre>"]
-        return "\n".join(lines)
+        return self.compose("🚨", "Container unhealthy", fields, logs)
 
     def msg_crash_loop(self, name, image, starts):
-        return "\n".join(
-            [
-                self.header(),
-                "",
-                "🔄 <b>Crash loop</b>",
-                "",
-                f"<b>Name:</b> <code>{esc(name)}</code>",
-                f"<b>Image:</b> <code>{esc(image)}</code>",
-                f"<b>Started:</b> <code>{starts}</code> times in "
-                f"<code>{CRASH_WINDOW // 60}</code> min",
-            ]
-        )
+        fields = [
+            ("Container", f"<code>{esc(name)}</code>"),
+            ("Image", f"<code>{esc(image)}</code>"),
+            ("Starts", f"<code>{starts}</code> in {CRASH_WINDOW // 60} min"),
+        ]
+        return self.compose("🚨", "Crash loop", fields)
+
+    def msg_startup(self, total):
+        fields = [
+            ("Watching", f"{total} containers"),
+            (
+                "Alerts",
+                f"down after {DEBOUNCE}s · unhealthy after {UNHEALTHY_GRACE}s · "
+                f"{CRASH_THRESHOLD} restarts in {CRASH_WINDOW // 60} min",
+            ),
+        ]
+        return self.compose("ℹ️", "Docker monitor started", fields)
 
     # ------------------------------------------------------------------ events
 
@@ -275,9 +297,14 @@ class Monitor:
                     DEBOUNCE,
                     name,
                 )
-            if self.alerted_down.pop(name, None):
+            down_since = self.alerted_down.pop(name, None)
+            if down_since:
                 log.info("recovered: %s", name)
-                send_telegram(self.msg_recovered(name, image))
+                send_telegram(
+                    self.msg_recovered(
+                        name, image, human_duration(time.time() - down_since)
+                    )
+                )
             self.track_start(name, container_id, image)
 
         elif action == "health_status":
@@ -290,7 +317,12 @@ class Monitor:
                 self.mark_alert("oom", name)
                 container = self.get_container(name)
                 restarts, logs = self.describe(container)
-                send_telegram(self.msg_down(name, image, "unknown", True, restarts, logs))
+                send_telegram(
+                    self.msg_down(
+                        name, image, "unknown", True, restarts, logs,
+                        ran_for=self.uptime(container),
+                    )
+                )
 
     def track_start(self, name, container_id, image):
         entry = self.starts.setdefault(name, {"id": container_id, "times": []})
@@ -341,6 +373,7 @@ class Monitor:
                 info["oom"],
                 restarts,
                 logs,
+                ran_for=self.uptime(container),
             )
             if send_telegram(message):
                 self.mark_alert("down", name)
@@ -383,7 +416,10 @@ class Monitor:
                 exit_code = state.get("ExitCode", "unknown")
                 oom = state.get("OOMKilled", False)
                 restarts, logs = self.describe(container)
-                message = self.msg_down(name, image, exit_code, oom, restarts, logs)
+                message = self.msg_down(
+                    name, image, exit_code, oom, restarts, logs,
+                    ran_for=self.uptime(container),
+                )
                 if send_telegram(message):
                     self.mark_alert("down", name)
                     self.alerted_down[name] = time.time()
@@ -400,13 +436,7 @@ class Monitor:
             total = len(self.client.containers.list(all=True))
         except Exception:  # noqa: BLE001
             total = "?"
-        send_telegram(
-            f"{self.header()}\n\n"
-            "🟢 <b>Docker monitor started</b>\n\n"
-            f"Watching <b>{total}</b> containers. Alerts only for containers that "
-            f"stay down ({DEBOUNCE}s), are unhealthy, or restart "
-            f"{CRASH_THRESHOLD} times in {CRASH_WINDOW // 60} minutes."
-        )
+        send_telegram(self.msg_startup(total))
 
     def read_events(self):
         while True:

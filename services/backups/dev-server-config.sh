@@ -9,7 +9,7 @@
 # units, Docker inventory and two small databases. What it leaves out: photos,
 # node_modules, build output, git clones, logs and time-series tables.
 #
-# Restore and rationale: services/backups/README.md in andreirepo/homelab.
+# Restore: see docs/restore.md in andreirepo/homelab.
 set -uo pipefail
 
 HOST=192.168.18.242
@@ -87,14 +87,17 @@ rc=$?
 
 if [ "$rc" -ne 0 ] || [ ! -s "$RAW" ]; then
   log "collection FAILED (rc=$rc)"
-  notify "❌ dev-server config backup FAILED (collect rc=$rc) $(date '+%F %T')"
+  notify fail "dev-server config" "Step=collect" "Exit code=$rc"
   exit 1
 fi
 size=$(du -h "$RAW" | cut -f1)
+files=$(tar tzf "$RAW" 2>/dev/null | wc -l)
 
-if ! age -r "$AGE_RECIPIENT" -o "$OUT" "$RAW" 2>>"$LOG"; then
-  log "encryption FAILED"
-  notify "❌ dev-server config backup FAILED (encrypt) $(date '+%F %T')"
+age -r "$AGE_RECIPIENT" -o "$OUT" "$RAW" 2>>"$LOG"
+enc_rc=$?
+if [ "$enc_rc" -ne 0 ]; then
+  log "encryption FAILED (rc=$enc_rc)"
+  notify fail "dev-server config" "Step=encrypt" "Exit code=$enc_rc"
   exit 1
 fi
 rm -f "$RAW"
@@ -106,9 +109,10 @@ log "archive built: $size sha256=$sha"
 rclone copyto "$OUT"          "$REMOTE/$(basename "$OUT")"        >/dev/null 2>>"$LOG"
 rclone copyto "$OUT"          "$REMOTE/dev-server-config-latest.tar.gz.age" >/dev/null 2>>"$LOG"
 rclone copyto "$OUT.sha256"   "$REMOTE/$(basename "$OUT").sha256" >/dev/null 2>>"$LOG"
-if [ $? -ne 0 ]; then
-  log "rclone upload FAILED"
-  notify "❌ dev-server config backup FAILED (upload) $(date '+%F %T')"
+urc=$?
+if [ "$urc" -ne 0 ]; then
+  log "rclone upload FAILED (rc=$urc)"
+  notify fail "dev-server config" "Step=upload" "Exit code=$urc"
   exit 1
 fi
 log "rclone upload OK"
@@ -123,4 +127,5 @@ rclone lsf "$REMOTE/" --files-only 2>/dev/null \
   | while read -r f; do rclone deletefile "$REMOTE/$f" >/dev/null 2>&1; done
 
 log "=== backup end ($size) ==="
-notify "✅ dev-server config backup OK ($size, $(date '+%F %T'))"
+notify ok "dev-server config" "Archive=$(basename "$OUT")" "Size=$size" \
+  "Files=$files" "Duration=$(fmt_secs $SECONDS)" "Destination=$(basename "${REMOTE%%/*}")"

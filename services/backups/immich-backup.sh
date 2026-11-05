@@ -79,16 +79,20 @@ B2_SIZE=$(echo "$B2_INFO" | grep -oP '[\d.]+\s*[KMGT]?iB' | head -1)
 log "=== backup end ==="
 
 # Send Telegram notification
-MSG="${BACKUP_STATUS} *Immich Backup — ${START_TIME}*
-
-*DB dump:* ${DB_STATUS}
-*Sync:* ${SYNC_STATUS}
-*B2 total:* ${B2_OBJECTS} files (${B2_SIZE})"
-
-if [ -n "$ERROR_MSG" ]; then
-  MSG="${MSG}
-
-*Error:* ${ERROR_MSG}"
+if [ "$BACKUP_STATUS" = "❌" ]; then
+  state=fail
+else
+  state=ok
 fi
 
-notify "$MSG"
+detalles=(
+  "Database=$( [ "$DB_STATUS" = "FAILED" ] && echo 'failed' || echo "$DB_STATUS" )"
+  "Sync=$SYNC_STATUS"
+  "Library=${B2_OBJECTS} files (${B2_SIZE})"
+  "Duration=$(fmt_secs "$SECONDS")"
+)
+if [ -n "$ERROR_MSG" ]; then
+  detalles+=("Error=$ERROR_MSG")
+fi
+
+notify "$state" "Immich backup" "${detalles[@]}"

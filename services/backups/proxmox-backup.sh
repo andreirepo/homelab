@@ -63,7 +63,7 @@ rc=$?
 
 if [ "$rc" -ne 0 ] || [ ! -s "$OUT" ]; then
   log "archive build/transfer FAILED (rc=$rc)"
-  notify "❌ Proxmox host-config backup FAILED (build rc=$rc) $(date '+%F %T')"
+  notify fail "Proxmox host config" "Step=collect" "Exit code=$rc"
   exit 1
 fi
 
@@ -79,7 +79,7 @@ urc=$?
 
 if [ "$urc" -ne 0 ]; then
   log "rclone upload FAILED (rc=$urc)"
-  notify "❌ Proxmox host-config backup FAILED (upload rc=$urc) $(date '+%F %T')"
+  notify fail "Proxmox host config" "Step=upload" "Exit code=$urc"
   exit 1
 fi
 log "rclone upload OK"
@@ -92,4 +92,5 @@ rclone lsf "$REMOTE/config/" --files-only 2>/dev/null \
   | head -n -"$KEEP" | while read -r f; do rclone deletefile "$REMOTE/config/$f" >/dev/null 2>&1; done
 
 log "=== backup end ($size) ==="
-notify "✅ Proxmox host-config backup OK ($size, $(date '+%F %T'))"
+notify ok "Proxmox host config" "Archive=$(basename "$OUT")" "Size=$size" \
+  "Duration=$(fmt_secs $SECONDS)" "Destination=$(basename "${REMOTE%%/*}")"

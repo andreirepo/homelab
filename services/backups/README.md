@@ -37,6 +37,38 @@ identity (private key):                 ~/.config/age/keys.txt on the workstatio
 read them. Losing that private key loses the archives; keep a copy somewhere
 safe outside this repository.
 
+
+## Message format
+
+Every job uses `notify` from `telegram-notify.sh`, so the chat reads as one
+system instead of three:
+
+```
+🖥️ homelab › media-server
+
+✅ Immich backup
+
+Database:   OK (61M)
+Sync:       OK
+Library:    11767 files (159 GiB)
+Duration:   1m 04s
+
+05 Nov 2026 · 03:31
+```
+
+```
+notify ok   "Proxmox host config" "Archive=$name" "Size=$size" "Duration=$(fmt_secs $SECONDS)"
+notify fail "Proxmox host config" "Step=upload" "Exit code=$urc"
+```
+
+States map to one emoji each: `ok` ✅, `warn` ⚠️, `fail` 🚨, `info` ℹ️. Keys are
+capitalised automatically (`exit_code=x` renders as **Exit code:** x), values
+may contain HTML, and the host in the header comes from `hostname -s`.
+
+The container monitor on the dev VM renders the same shape from
+`monitor.py`, with `homelab › dev-server` as the header and the same key/value
+lines and timestamp.
+
 ## Restore
 
 Config archive, from the workstation:
