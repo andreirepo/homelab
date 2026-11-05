@@ -136,3 +136,31 @@ at all. That is the honest test for anything else you are tempted to move:
 self-host when the job needs *your* network, your hardware or your data, not
 because the setup is fun.
 
+## The migration, and the two addresses it broke
+
+Moving `andrei-portfolio` from the container runner to pods surfaced the same
+problem twice, and it is the detail worth stealing from this write-up: **pods
+live on the LAN, not on Tailscale.**
+
+| Job | Was pointing at | Symptom | Fixed by |
+|---|---|---|---|
+| AI review → LM Studio | a Tailscale IP of a PC that had been offline for 70 days | `curl` timed out, review silently skipped | the PC's LAN address |
+| deploy → server | a Tailscale IP | `ssh: connect to host … port 22: Connection timed out` | the server's LAN address |
+
+The second one failed a real deployment on `main` and triggered the rollback
+job, which failed the same way. Nothing broke — the previous image kept
+serving — but it is exactly the sort of thing that only shows up in production.
+
+Two smaller findings from the same migration:
+
+- **The review never refreshed.** The workflow skipped the whole LM Studio
+  check when a review comment already existed, so the "update the existing
+  comment" branch was unreachable: every push after the first was a no-op that
+  went green in ten seconds.
+- **The model name was wrong.** The payload asked for `qwen/qwen3-14b`; LM
+  Studio serves `qwen3-14b` and answers `400`, which `curl -sf` swallowed into
+  `review_failed=true`. Reviews had been skipped silently for as long as the
+  name had been wrong.
+
+Neither would have been caught by a green check. Both were caught by reading
+the log of a job that "succeeded".
