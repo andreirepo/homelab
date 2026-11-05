@@ -114,3 +114,25 @@ pct create <id> <ubuntu-24.04-template> --cores 2 --memory 3072 --rootfs local-l
 # inside: install k3s, cert-manager, helm, the controller, then this scale set
 kubectl -n arc-runners get pods -w     # the show: 0 → N → 0
 ```
+
+## What deliberately stayed on GitHub-hosted runners
+
+The point of this exercise was not "self-host everything". `declara720` — a
+private repo with a Playwright suite — stayed on `ubuntu-latest`, and the
+reasoning is worth more than the setup itself:
+
+- **Its workflow needs a build environment**, not a runner: Node, pnpm and
+  Chromium with its system libraries. The ARC image has none of that, so the
+  job would need a custom image to be built, published and kept current.
+- **RAM is the binding constraint.** Chromium plus a Vite build peaks above
+  2 GB. The cluster has 3 GB in total and 2.1 GB free at idle; the host has
+  ~5 GB. It would fit on a quiet afternoon and fail on a bad one.
+- **It costs nothing to leave.** ~100 minutes a month against 2,000 free
+  private-repository minutes. There is no bill to optimise.
+
+Which leaves exactly one job that belongs here: the AI review, because it talks
+to a language model on the LAN — an address GitHub-hosted runners cannot reach
+at all. That is the honest test for anything else you are tempted to move:
+self-host when the job needs *your* network, your hardware or your data, not
+because the setup is fun.
+
