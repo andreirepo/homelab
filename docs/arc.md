@@ -55,6 +55,22 @@ A quirk worth knowing: inside the pod, `/proc/meminfo` reports the **host's**
 16 GB, because containers are not namespaced for it. `nproc` does reflect the
 container limit. Don't size anything from `free` inside a runner.
 
+### A second repository, warm cluster
+
+`arc-portfolio` is a separate scale set (same App, `maxRunners: 1`) because a
+personal account has no org runner groups. A throwaway pull request measured it:
+
+| | |
+|---|---|
+| pull request opened → job finished | **17 s** |
+| time in queue | **7 s** |
+| the job itself | 9 s |
+| pods afterwards | 0 |
+
+The same repository's GitHub-hosted jobs have queued for **20+ minutes** on busy
+mornings. The gap between 7 seconds and 20 minutes, not runner speed, is the
+argument for self-hosting.
+
 ## Gotchas
 
 - **Helm needs `KUBECONFIG`.** A non-interactive shell over SSH does not pick
@@ -66,6 +82,18 @@ container limit. Don't size anything from `free` inside a runner.
   groups, so each repository needs its own scale set (or an organisation).
 - **Thin LVM without `discard`** had left ~82 GB allocated and unusable in the
   Proxmox pool; `discard=on` + `fstrim` reclaimed it before any of this.
+- **The runner image is the agent, not a build environment.**
+  `ghcr.io/actions/actions-runner` ships `git`, `curl` and the action runtimes;
+  there is no Node, no pnpm and no Chromium (`node --version` → not found).
+  Anything more needs a custom image.
+- **`kubectl logs deploy/…-listener` does not exist.** ARC creates the listener
+  as a bare Pod, not a Deployment — log the pod.
+- **One transient reconcile error per new scale set**:
+  `autoscalinglisteners… already exists`. Harmless, appears once, the listener
+  comes up anyway.
+- **A classic PAT cannot add a repository to an App installation.**
+  `PUT /user/installations/{id}/repositories` answers 403/404 for PATs; only an
+  OAuth-app token or the App's own JWT can. That click belongs in the UI.
 
 ## Security notes
 
