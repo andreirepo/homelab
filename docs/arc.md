@@ -83,9 +83,9 @@ argument for self-hosting.
 - **Thin LVM without `discard`** had left ~82 GB allocated and unusable in the
   Proxmox pool; `discard=on` + `fstrim` reclaimed it before any of this.
 - **The runner image is the agent, not a build environment.**
-  `ghcr.io/actions/actions-runner` ships `git`, `curl` and the action runtimes;
-  there is no Node, no pnpm and no Chromium (`node --version` → not found).
-  Anything more needs a custom image.
+  `ghcr.io/actions/actions-runner` ships `git`, `curl`, `jq`, `python3`, `tar`,
+  `unzip`, `sudo` and the action runtimes — but no Node, no pnpm and no
+  Chromium (`node --version` → not found). Anything more needs a custom image.
 - **`kubectl logs deploy/…-listener` does not exist.** ARC creates the listener
   as a bare Pod, not a Deployment — log the pod.
 - **One transient reconcile error per new scale set**:
