@@ -1,0 +1,30 @@
+name: ARC smoke test
+
+# Runs on the self-hosted ARC scale set in the homelab k3s cluster.
+# minRunners is 0, so the pods only exist while this job runs.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  identity:
+    # Never from a fork: self-hosted runners execute whatever the PR contains.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: arc-homelab
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Where am I
+        run: |
+          echo "runner: ${RUNNER_NAME}"
+          echo "pod:    $(hostname)"
+          echo "cpus:   $(nproc)"
+          echo "memory: $(awk '/MemTotal/{printf "%d MB", $2/1024}' /proc/meminfo)"
+          echo "os:     $(. /etc/os-release && echo "$PRETTY_NAME")"
+          echo "shard:  ${{ matrix.shard }}"
+      - name: Keep it alive long enough to watch
+        run: sleep 25
